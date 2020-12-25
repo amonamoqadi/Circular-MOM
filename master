@@ -1,0 +1,40 @@
+#include <SoftwareSerial.h>
+SoftwareSerial BTserial(2,3); // RX | TX
+// Connect the HC-05 TX to Arduino pin 2 RX. 
+// Connect the HC-05 RX to Arduino pin 3 TX through a voltage shift.
+
+#define ledPin 4 
+String c =" ";
+int count =0;
+
+void setup() 
+{
+    pinMode(ledPin, OUTPUT);
+    digitalWrite(ledPin, LOW); 
+    Serial.begin(9600);
+    BTserial.begin(9600);
+    count =0 ;
+    Serial.println("start master");
+    delay(5000);
+}
+ 
+void loop()
+{
+      BTserial.println("ma");
+      delay(1000);
+      if(BTserial.available())
+      {    c= BTserial.readStringUntil('a'); 
+           Serial.println(c);
+           count =0;
+           digitalWrite(ledPin, LOW);
+      }
+      else if(!BTserial.available())
+      {  
+        count++;
+      }
+
+      if(count>=10)
+      {
+        digitalWrite(ledPin, HIGH);
+      }
+}//##### end loop
