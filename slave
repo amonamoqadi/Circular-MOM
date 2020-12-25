@@ -1,0 +1,216 @@
+
+#include <SoftwareSerial.h>
+#include <Adafruit_GPS.h>
+
+SoftwareSerial BTSerial(5,4); // RX | TX on arduino//5:tx bluetooth
+SoftwareSerial GPSserial(14,12); //rx , tx on nano //GPS
+SoftwareSerial A6Module(13,15); //RX,TX
+
+//GPS
+#include <TinyGPS++.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266WiFiAP.h>
+#include <ESP8266WiFiGeneric.h>
+#include <ESP8266WiFiMulti.h>
+#include <ESP8266WiFiScan.h>
+#include <ESP8266WiFiSTA.h>
+#include <ESP8266WiFiType.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
+#include <WiFiServer.h>
+#include <WiFiUdp.h>
+TinyGPSPlus gps;
+//################## 
+const char* ssid = "SSID";// change it to your SSID 
+const char* password = "pass";// change to the network password
+static const uint32_t GPSBaud = 9600;
+int year, month, date, hour, minute, second;
+String date_str, time_str, lat_str, lng_str;
+String positionLink = "";
+bool gsmFlag;
+//#####################end GPS
+//#################### for server
+WiFiServer server(80);
+WiFiClient client;
+IPAddress ip(192,168,1,102);//device ip.. ipconfig in cmd
+//###########################
+#define ledPin 0
+String c =" ";
+
+void setup() {
+    pinMode(ledPin, OUTPUT);
+    digitalWrite(ledPin, LOW); 
+    gsmFlag = true;
+    Serial.begin(9600); 
+    BTSerial.begin(9600); 
+    GPSserial.begin(GPSBaud);
+    A6Module.begin(9600);
+    WIFIsetup();
+    Serial.println("start slave");
+    delay(2000); 
+}
+
+void loop(){
+   blueLOOP(); 
+}//#### end loop
+
+void blueLOOP(){
+     BTSerial.listen();
+     BTSerial.println("oa");
+     delay(1000); 
+     if(BTSerial.available())
+     {    c= BTSerial.readStringUntil('a'); 
+           Serial.println(c);
+           digitalWrite(ledPin, LOW);
+     }
+     else if(c == "+DISC:LINK_LOSS\r\nOK\r\n")
+     {
+        digitalWrite(ledPin, HIGH);
+        Serial.println();
+        delay(500);
+        sendMSM();
+        delay(500);
+        GPSloop(); 
+     } 
+}
+
+void WIFIsetup(){  
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid,password);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi Connected");
+  server.begin();
+  Serial.println("Start server");
+  //Show IP address
+  Serial.println(WiFi.localIP());
+}
+
+void GPSloop(){
+  GPSserial.listen();
+  while (GPSserial.available() > 0)
+    if (gps.encode(GPSserial.read()))
+    {
+        Serial.print(F("Location: ")); 
+        if (gps.location.isUpdated())
+        {
+          lat_str = String(gps.location.lat(), 6);
+          Serial.print(lat_str);
+          Serial.print(F(","));
+          lng_str = String(gps.location.lng(), 6);
+          Serial.print(lng_str);
+          Serial.print(" ");
+          httpRequest(lat_str, lng_str);
+        }
+        else
+        {
+          Serial.print(F("INVALID"));
+        }
+      
+        Serial.print(F("  Date/Time: "));
+        if (gps.date.isValid())
+        {
+          Serial.print(gps.date.month());
+          Serial.print(F("/"));
+          Serial.print(gps.date.day());
+          Serial.print(F("/"));
+          Serial.print(gps.date.year());
+        }
+        else
+        {
+          Serial.print(F("INVALID"));
+        }
+      
+        Serial.print(F(" "));
+        if (gps.time.isValid())
+        {
+          if (gps.time.hour() < 10) Serial.print(F("0"));
+          Serial.print(gps.time.hour());
+          Serial.print(F(":"));
+          if (gps.time.minute() < 10) Serial.print(F("0"));
+          Serial.print(gps.time.minute());
+          Serial.print(F(":"));
+          if (gps.time.second() < 10) Serial.print(F("0"));
+          Serial.print(gps.time.second());
+          Serial.print(F("."));
+          if (gps.time.centisecond() < 10) Serial.print(F("0"));
+          Serial.print(gps.time.centisecond());
+        }
+        else
+        {
+          Serial.print(F("INVALID"));
+        }
+      
+        Serial.println();
+    }
+}
+
+void httpRequest(String latt , String lngg ) {// CONNECTING WITH MYSQL
+  if (!client.connect(ip, 80)) {
+        Serial.println("connection failed");
+        return;
+   }
+   client.print(String("GET http://localhost/connectionsql.php?") + 
+                            ("&latt=") + latt +
+                            ("&lng=") + lngg +
+                            " HTTP/1.1\r\n" +
+                   "Host: 192.168.1.102\r\n" +
+                   "Connection: close\r\n\r\n");
+      unsigned long timeout = millis();
+      while (client.available() == 0) {
+          if (millis() - timeout > 1000) {
+              Serial.println(">>> Client Timeout !");
+              client.stop();
+              return;
+          }
+      }
+      // Read all the lines of the reply from server and print them to Serial
+      while(client.available()) {
+          String line = client.readStringUntil('\r');
+          Serial.print(line);
+          
+      }
+      Serial.println();
+      Serial.println("closing connection");
+      
+      //positionLink..
+//        positionLink += "http://maps.google.com/maps?&z=15&mrt=yp&t=k&q=";
+//        positionLink += latt;
+//        positionLink += '+';
+//        positionLink += lngg;
+//        if(gsmFlag){
+//             gsmFlag = false;
+//             sendMSM(positionLink);
+//        }
+}
+
+void sendMSM() {
+  A6Module.println("AT"); //Once the handshake test is successful, it will back to OK
+  updateSerial();
+  A6Module.println("AT+CMGF=1"); // Configuring TEXT mode
+  updateSerial();
+  A6Module.println("AT+CMGS=\"+ZZxxxxxxxxxx\"");//change ZZ with country code and xxxxxxxxxxx with phone number to sms
+  updateSerial();
+  A6Module.print("Warning! your child is far away"); //text content
+  updateSerial();
+  A6Module.write(26);
+}
+
+void updateSerial()
+{
+  delay(500);
+ if (Serial.available()) 
+  {
+    A6Module.write(Serial.read());//Forward what Serial received to Software Serial Port
+  }
+  if(A6Module.available()) 
+  {
+    Serial.write(A6Module.read());//Forward what Software Serial received to Serial Port
+  }
+}
