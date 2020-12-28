@@ -21,8 +21,8 @@ SoftwareSerial A6Module(13,15); //RX,TX
 #include <WiFiUdp.h>
 TinyGPSPlus gps;
 //################## 
-const char* ssid = "SSID";// change it to your SSID 
-const char* password = "pass";// change to the network password
+const char* ssid = "Ashraf";
+const char* password = "174517451";
 static const uint32_t GPSBaud = 9600;
 int year, month, date, hour, minute, second;
 String date_str, time_str, lat_str, lng_str;
@@ -32,7 +32,7 @@ bool gsmFlag;
 //#################### for server
 WiFiServer server(80);
 WiFiClient client;
-IPAddress ip(192,168,1,102);//device ip.. ipconfig in cmd
+IPAddress ip(192,168,1,104);//device ip.. ipconfig in cmd
 //###########################
 #define ledPin 0
 String c =" ";
@@ -191,11 +191,12 @@ void httpRequest(String latt , String lngg ) {// CONNECTING WITH MYSQL
 }
 
 void sendMSM() {
+  A6Module.listen();
   A6Module.println("AT"); //Once the handshake test is successful, it will back to OK
   updateSerial();
   A6Module.println("AT+CMGF=1"); // Configuring TEXT mode
   updateSerial();
-  A6Module.println("AT+CMGS=\"+ZZxxxxxxxxxx\"");//change ZZ with country code and xxxxxxxxxxx with phone number to sms
+  A6Module.println("AT+CMGS=\"+970598054213\"");//change ZZ with country code and xxxxxxxxxxx with phone number to sms
   updateSerial();
   A6Module.print("Warning! your child is far away"); //text content
   updateSerial();
